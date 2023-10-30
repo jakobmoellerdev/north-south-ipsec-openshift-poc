@@ -29,3 +29,9 @@ spec:
           mode: 365
           overwrite: true
           path: /usr/local/lib64/libiperf.so.0.0.0
+        - contents:
+            compression: ""
+            source: data:,%2Fusr%2Flocal%2Flib64
+          mode: 256
+          overwrite: true
+          path: /etc/ld.so.conf.d/iperf.conf
