@@ -10,20 +10,4 @@ storage:
     mode: 0555
     overwrite: true
     contents:
-      local: usr/bin/iperf3
-  - path: /usr/local/lib64/libiperf.so.0
-    mode: 0555
-    overwrite: true
-    contents:
-      local: usr/lib64/libiperf.so.0
-  - path: /usr/local/lib64/libiperf.so.0.0.0
-    mode: 0555
-    overwrite: true
-    contents:
-      local: usr/lib64/libiperf.so.0.0.0
-  - path: /etc/ld.so.conf.d/iperf.conf
-    mode: 0400
-    overwrite: true
-    contents:
-      inline: |
-        /usr/local/lib64
+      local: iperf3
