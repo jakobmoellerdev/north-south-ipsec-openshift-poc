@@ -9,7 +9,7 @@ FOLDER="./$CANAME"
 rm -r $FOLDER
 mkdir $FOLDER
 
-certutil -S -k rsa -n $CANAME -s "CN=ca" -v 12 -t "CT,C,C" -x -d $FOLDER
+certutil -S -k rsa -n $CANAME -s "CN=$CANAME" -v 12 -t "CT,C,C" -x -d $FOLDER
 certutil -S -k rsa -c $CANAME -n $SOUTH -s "CN=$SOUTH" -v 12 -t "u,u,u" -d $FOLDER
 certutil -S -k rsa -c $CANAME -n $NORTH -s "CN=$NORTH" -v 12 -t "u,u,u" -d $FOLDER
 
