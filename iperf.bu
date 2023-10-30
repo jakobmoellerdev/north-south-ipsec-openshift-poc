@@ -1,0 +1,29 @@
+variant: openshift
+version: 4.14.0
+metadata:
+  name: 99-master-iperf
+  labels:
+    machineconfiguration.openshift.io/role: master
+storage:
+  files:
+  - path: /usr/local/bin/iperf3
+    mode: 0555
+    overwrite: true
+    contents:
+      local: usr/bin/iperf3
+  - path: /usr/local/lib64/libiperf.so.0
+    mode: 0555
+    overwrite: true
+    contents:
+      local: usr/lib64/libiperf.so.0
+  - path: /usr/local/lib64/libiperf.so.0.0.0
+    mode: 0555
+    overwrite: true
+    contents:
+      local: usr/lib64/libiperf.so.0.0.0
+  - path: /etc/ld.so.conf.d/iperf.conf
+    mode: 0400
+    overwrite: true
+    contents:
+      inline: |
+        /usr/local/lib64
