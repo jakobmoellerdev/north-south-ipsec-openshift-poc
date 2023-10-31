@@ -1,0 +1,19 @@
+apiVersion: performance.openshift.io/v2
+kind: PerformanceProfile
+metadata:
+  name: performance-profile
+spec:
+  cpu:
+    isolated: 0-1
+    reserved: 2-7
+  machineConfigPoolSelector:
+    machineconfiguration.openshift.io/role: master
+  nodeSelector:
+    node-role.kubernetes.io/master: ""
+  numa:
+    topologyPolicy: restricted
+  realTimeKernel:
+    enabled: true
+  workloadHints:
+    highPowerConsumption: true
+    realTime: true

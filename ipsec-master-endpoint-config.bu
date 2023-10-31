@@ -33,17 +33,17 @@ systemd:
 storage:
   files:
   - path: /etc/pki/certs/ca.pem
-    mode: 0400
+    mode: 0444
     overwrite: true
     contents:
       local: ipsec-test-ca.crt
   - path: /etc/pki/certs/south.p12
-    mode: 0400
+    mode: 0444
     overwrite: true
     contents:
       local: south.p12
   - path: /etc/pki/certs/north.crt
-    mode: 0400
+    mode: 0444
     overwrite: true
     contents:
       local: north.crt
