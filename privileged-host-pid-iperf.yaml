@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: iperf
+  namespace: openshift-monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: iperf
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: iperf
+      name: iperf
+      namespace: openshift-monitoring
+    spec:
+      containers:
+        - args:
+            - --client
+            - 192.168.126.1 # IP address of the host where iperf3 server is running.
+            - --time
+            - "0"
+            - --zerocopy
+            - --bidir
+            - --bitrate
+            - "$(BITRATE)"
+            - --interval
+            - "1" # seconds between each interval
+          image: quay.io/jmoller/iperf3:latest
+          env:
+            - name: BITRATE
+              value: "1G"
+          imagePullPolicy: IfNotPresent
+          name: iperf3
+          ports:
+            - containerPort: 5201
+              hostPort: 5201
+              name: iperf
+              protocol: TCP
+      dnsPolicy: ClusterFirstWithHostNet
+      enableServiceLinks: true
+      hostNetwork: true
+      hostPID: true
+      nodeSelector:
+        kubernetes.io/os: linux
+      priorityClassName: system-cluster-critical
+      restartPolicy: Always
+      securityContext:
+        runAsNonRoot: false
+      serviceAccountName: node-exporter
+      terminationGracePeriodSeconds: 10
+  updateStrategy:
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+    type: RollingUpdate
