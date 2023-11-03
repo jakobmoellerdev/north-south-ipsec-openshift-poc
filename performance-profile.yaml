@@ -18,6 +18,6 @@ spec:
   realTimeKernel:
     enabled: true
   workloadHints:
-    highPowerConsumption: true
+    highPowerConsumption: false
     perPodPowerManagement: false
     realTime: true

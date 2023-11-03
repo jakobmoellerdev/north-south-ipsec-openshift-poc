@@ -17,7 +17,7 @@ spec:
       containers:
         - args:
             - --client
-            - 192.168.126.1 # IP address of the host where iperf3 server is running.
+            - 10.16.231.98 # IP address of the host where iperf3 server is running.
             - --time
             - "0"
             - --zerocopy
@@ -26,7 +26,7 @@ spec:
             - "$(BITRATE)"
             - --interval
             - "1" # seconds between each interval
-          image: quay.io/jmoller/iperf3:latest
+          image: quay.io/jmoller/iperf3:static
           env:
             - name: BITRATE
               value: "1G"
