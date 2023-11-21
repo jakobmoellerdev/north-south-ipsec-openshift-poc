@@ -34,10 +34,10 @@ The given Machine config will automatically apply the `ipsec.conf` file into the
 For the other node:
 ```bash
 [ ! -f /etc/ipsec.d/cert9.db ] && ipsec initnss --nssdir /etc/ipsec.d || echo
-certutil -A -i ./ipsec-test-ca/ipsec-test-ca.crt -n "ipsec-test-ca" -t "CT,," -d sql:/var/lib/ipsec/nss
+certutil -A -i ./ipsec-test-ca/ipsec-test-ca.crt -n "ipsec-test-ca" -t "CT,," -d sql:/etc/ipsec.d # /etc/ipsec.d is the location of the nss db, you should use the default showing when running ipsec initnss --help
 # this assumes the current node is north, the other node is south
-certutil -A -i ./ipsec-test-ca/south.crt -n "south" -t "P,," -d sql:/var/lib/ipsec/nss
-pk12util -i./ipsec-test-ca/north.p12 -d sql:/var/lib/ipsec/nss -W ""
+certutil -A -i ./ipsec-test-ca/south.crt -n "south" -t "P,," -d sql:/etc/ipsec.d
+pk12util -i./ipsec-test-ca/north.p12 -d sql:/etc/ipsec.d -W ""
 cp ./ipsec-test-ca/ipsec.conf /etc/ipsec.d/host-to-host-cert.conf
 ```
 
