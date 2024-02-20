@@ -4,7 +4,7 @@
 apiVersion: performance.openshift.io/v2
 kind: PerformanceProfile
 metadata:
-  name: performance
+  name: ns-low-latency
 spec:
   cpu:
     isolated: 2-5

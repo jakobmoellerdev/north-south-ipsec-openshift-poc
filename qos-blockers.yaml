@@ -1,0 +1,37 @@
+## For details on Tuning adjustments see https://docs.openshift.com/container-platform/4.14/scalability_and_performance/cnf-low-latency-tuning.html#node-tuning-operator-creating-pod-with-guaranteed-qos-class_cnf-master
+## https://docs.openshift.com/container-platform/4.14/scalability_and_performance/cnf-low-latency-tuning.html#configuring_for_irq_dynamic_load_balancing_cnf-master
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qos-blockers
+  namespace: default
+spec:
+  replicas: 4  # Set to the number of isolated Cores
+  selector:
+    matchLabels:
+      app: qos-blocker
+  template:
+    metadata:
+      labels:
+        app: qos-blocker
+      annotations:
+        irq-load-balancing.crio.io: "disable"
+        cpu-quota.crio.io: "disable"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      runtimeClassName: performance-ns-low-latency
+      priorityClassName: "openshift-user-critical"
+      containers:
+        - name: sample-app
+          image: docker.io/library/busybox:1.36
+          command: ["sh", "-c", "tail -f /dev/null"]
+          securityContext:
+            allowPrivilegeEscalation: false
+          resources:
+            requests:
+              memory: "1Mi"
+              cpu: "1"
+            limits:
+              memory: "1Mi"
+              cpu: "1"
