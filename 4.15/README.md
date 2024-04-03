@@ -1,68 +1,263 @@
-# Install butane
+# Step By Step Instructions for setting up IPsec CPU Performance Testing on OpenShift SNO Clusters
+
+## Prerequisites
+
+### Create a SNO Cluster on 4.15+ as well as a RHEL 9.3 Node
+
+1. We will assume a RHEL Node was installed under `192.168.124.253`, and will be referred to as the `north` node.
+2. We will assume an OCP SNO Node was installed under `192.168.124.37`, and will be referred to as the `south` node.
+
+### Install butane
+
+Butane will be used to create MachineConfiguration Objects containing encoded Certificate data for import into the SNO.
+
 https://docs.openshift.com/container-platform/4.15/installing/install_config/installing-customizing.html#installation-special-config-butane-install_installing-customizing
 
 ```bash
 curl https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane --output butane
 ```
 
-# Install nmstate-operator
+### Install nmstate-operator on the SNO
+
+NMState Operator will be used to setup the Tunnel and Interface Connection on the SNO Node.
+
 https://docs.openshift.com/container-platform/4.15/networking/k8s_nmstate/k8s-nmstate-about-the-k8s-nmstate-operator.html#installing-the-kubernetes-nmstate-operator-CLI_k8s-nmstate-operator
 
 ```bash
 oc apply -f nmstate-operator-deployment.yaml
+```
+
+Once the Operator has been installed the NMState CustomResource can be created which will initialize the actual operator.
+
+```bash
 oc apply -f nmstate.yaml
 ```
 
-# Import certs
-https://docs.openshift.com/container-platform/4.14/networking/ovn_kubernetes_network_provider/configuring-ipsec-ovn.html#nw-ovn-ipsec-north-south-enable_configuring-ipsec-ovn
+### Patch the OVN Configuration on the SNO
 
-./import-certs.sh
-
-# Configure ipsec with nmstate-operator
-oc apply -f nmstate-ipsec.yaml
-
-# Collecting tcdpume on the node
-https://docs.openshift.com/container-platform/4.14/support/gathering-cluster-data.html#support-collecting-network-trace_gathering-cluster-data
-
-
-
-# Details on setup used for testing
-
-## SNO Node (10.46.97.6)
-```
-ssh core@cnfdt6.lab.eng.tlv2.redhat.com
-```
 ```bash
- Static hostname: cnfdt6.lab.eng.tlv2.redhat.com
-       Icon name: computer-server
-         Chassis: server 🖳
-      Machine ID: 8a1bfc46e6154783b2540f2198ed92b3
-         Boot ID: 97ff3ca520044568b8da915270a2e1bc
-Operating System: Red Hat Enterprise Linux CoreOS 415.92.202403270524-0 (Plow)
-     CPE OS Name: cpe:/o:redhat:enterprise_linux:9::coreos
-          Kernel: Linux 5.14.0-284.59.1.el9_2.x86_64
-    Architecture: x86-64
- Hardware Vendor: Dell Inc.
-  Hardware Model: PowerEdge R640
-Firmware Version: 2.8.1
+oc patch networks.operator.openshift.io cluster --type=merge \
+    -p '{"spec":{"defaultNetwork":{"ovnKubernetesConfig":{"ipsecConfig":{"mode": "External"}}}}}'
+oc patch networks.operator.openshift.io cluster --type=merge \
+    -p '{"spec":{"defaultNetwork":{"ovnKubernetesConfig":{"gatewayConfig":{"routingViaHost": true}}}}}'
 ```
 
-## Rhel-Master (10.46.97.188)
-```
-ssh cloud-user@10.46.97.188
-```
+## Using Butane to import Certificates into the SNO
+
+To setup the SNO with the necessary certificates for IPsec, we will use Butane to create a MachineConfiguration Object containing the necessary data. 
+
+### (Optional) Creating new Certificates
+
+Note that this is only necessary if you want to create new certificates. If you already have certificates, you can skip this step. You can also use the existing certificates from the repository.
+
 ```bash
- Static hostname: rhel9-jakobmoller
-       Icon name: computer-vm
-         Chassis: vm 🖴
-      Machine ID: 5c4bfea3fdc94e189fe3daa5aee40e90
-         Boot ID: d674e5f332354dffb3f95f06a68e8d4e
-  Virtualization: kvm
-Operating System: Red Hat Enterprise Linux 9.3 (Plow)     
-     CPE OS Name: cpe:/o:redhat:enterprise_linux:9::baseos
-          Kernel: Linux 5.14.0-362.18.1.el9_3.x86_64
-    Architecture: x86-64
- Hardware Vendor: Red Hat
-  Hardware Model: KVM
-Firmware Version: 1.16.0-4.module+el8.8.0+19627+2d14cb21
+sh 9999-ipsec-new-cert-gen.sh
 ```
+
+### Creating the MachineConfiguration and Applying it
+
+```bash
+sh 99-master-ipsec-certs.sh
+```
+
+This will generate a file called `99-master-ipsec-certs.yaml` which will contain the encoded certificates.
+
+Now we can simply apply the generated MachineConfiguration, which will trigger a restart of the node:
+
+```bash
+oc apply -f 99-master-ipsec-certs.yaml
+```
+
+## Setting up the RHEL Node
+
+### Install libreswan on the RHEL node
+
+Libreswan is gonna be used to setup the VPN tunnel on the RHEL node.
+
+```bash
+sudo dnf install libreswan
+```
+
+### Configure the Tunnel Subnet for routing Traffic on the RHEL Node
+
+Since we will need a dedicated subnet for the tunnel, we will create a new network interface for the tunnel.
+
+```bash
+sudo nmcli con add con-name ipsec ifname ipsec type tun mode tun
+sudo nmcli con modify ipsec ipv4.addresses 172.16.110.8/24
+sudo nmcli con modify ipsec ipv4.method manual
+sudo nmcli con modify ipsec ipv6.method disabled
+sudo nmcli conn up ipsec
+```
+
+This will create a new tunnel which will assign the subnet `172.16.110.0/24` to a new connection called `ipsec`.
+Also, we will hardcode the interface address `172.16.110.8/24` so that we can easily communicate between the SNO
+and the RHEL node without introducing a gateway routing.
+
+### Configure the RHEL Certificates on the RHEL Node
+
+Similar to the SNO, we will need to import the certificates into the RHEL node.
+
+```bash
+NSSDIR="/var/lib/ipsec/nss"
+[ ! -f /etc/ipsec.d/cert9.db ] && ipsec initnss --nssdir ${NSSDIR} || echo
+certutil -A -i ./ipsec-test-ca/ipsec-test-ca.crt -n "ipsec-test-ca" -t "CT,," -d sql:${NSSDIR} # /etc/ipsec.d is the location of the nss db, you should use the default showing when running ipsec initnss --help
+# this assumes the current node is north, the other node is south
+certutil -A -i ./ipsec-test-ca/south.crt -n "south" -t "P,," -d sql:${NSSDIR}
+pk12util -i./ipsec-test-ca/north.p12 -d sql:${NSSDIR} -W ""
+```
+
+This will initialize the ipsec certificate store and import the certificates on the RHEL node.
+
+
+### Configure the IPSec Connection on the RHEL Node
+
+```bash
+cat > "/etc/ipsec.d/sno.conf" <<-EOF
+conn sno
+    left=192.168.124.253
+    leftid=%fromcert
+    leftrsasigkey=%cert
+    leftsubnet=172.16.110.0/24
+    leftcert=north
+    rightrsasigkey=%cert
+    right=192.168.124.37
+    rightid=%fromcert
+    authby=rsasig
+    auto=add
+    rekey=no
+    ikelifetime=86400s
+    salifetime=3600s
+    ikev2=insist
+    phase2=esp
+    fragmentation=yes
+    ike=aes256-sha1
+    phase2alg=aes256-sha1
+EOF
+sudo systemctl enable ipsec
+sudo systemctl start ipsec
+sudo ipsec auto --add sno
+```
+
+## Setting up the SNO
+
+### Configure the IPSec Connection on the SNO
+
+```bash
+oc apply -f 100-nodenetworkconfigurationpolicy.yaml
+```
+
+### Verifying the Connection
+
+You can now verify the connection by pinging the RHEL node from the SNO node once the Policy was applied.
+
+```bash
+oc debug node/sno-0
+# In the SNO
+ping 172.16.110.8
+```
+
+When the tunnel was successfully established, you should see the ping responses from the RHEL node.
+
+## Setting up Performance Test Tooling
+
+### Setup the Performance Profile
+
+To simulate that the IPSec Tunnel workload should only be used on the management coreset, 
+we will create a Performance Profile that will be used to pin the workload to the correct core.
+
+```bash
+# oc adm must-gather
+# podman run --entrypoint performance-profile-creator -v ./must-gather.local.foobar:/must-gather:z registry.redhat.io/openshift4/ose-cluster-node-tuning-operator:v4.15 --mcp-name=master --reserved-cpu-count=2 --rt-kernel=true --split-reserved-cpus-across-numa=false --must-gather-dir-path /must-gather --power-consumption-mode=ultra-low-latency > performance-profile.yaml
+cat <<EOF | oc apply -f -
+apiVersion: performance.openshift.io/v2
+kind: PerformanceProfile
+metadata:
+  name: ns-low-latency
+spec:
+  cpu:
+    # Change the configuration here based on your core layout
+    isolated: 2-7
+    reserved: 0-1
+  machineConfigPoolSelector:
+    pools.operator.machineconfiguration.openshift.io/master: ""
+  nodeSelector:
+    node-role.kubernetes.io/master: ""
+  numa:
+    topologyPolicy: restricted
+  realTimeKernel:
+    enabled: true
+  workloadHints:
+    highPowerConsumption: false
+    perPodPowerManagement: false
+    realTime: true
+EOF
+```
+
+The reserved CPU count in this example is using 2 threads on a hyperthreaded CPU, so it will reserve 1 core for the management core set.
+
+Note that this will require a reboot.
+
+### Prepare QOS Blocker Workload
+
+To block IRQ kernel offloading to the isolated cores, we should add a workload scheduling 
+a QOS blocker no-op workload that is using the runtime class"
+
+```yaml
+## For details on Tuning adjustments see https://docs.openshift.com/container-platform/4.14/scalability_and_performance/cnf-low-latency-tuning.html#node-tuning-operator-creating-pod-with-guaranteed-qos-class_cnf-master
+## https://docs.openshift.com/container-platform/4.14/scalability_and_performance/cnf-low-latency-tuning.html#configuring_for_irq_dynamic_load_balancing_cnf-master
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qos-blockers
+  namespace: default
+spec:
+  replicas: 4  # Set to the number of isolated Cores
+  selector:
+    matchLabels:
+      app: qos-blocker
+  template:
+    metadata:
+      labels:
+        app: qos-blocker
+      annotations:
+        irq-load-balancing.crio.io: "disable"
+        cpu-quota.crio.io: "disable"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      runtimeClassName: performance-ns-low-latency # uses the performance profile named ns-low-latency, adjust to name as necessary
+      priorityClassName: "openshift-user-critical"
+      containers:
+        - name: sample-app
+          image: docker.io/library/busybox:1.36
+          command: ["sh", "-c", "tail -f /dev/null"]
+          securityContext:
+            allowPrivilegeEscalation: false
+          resources:
+            requests:
+              memory: "1Mi"
+              cpu: "1"
+            limits:
+              memory: "1Mi"
+              cpu: "1"
+```
+
+### Prepare the Performance Test on the SNO
+
+This step is around creating an iperf server that listens on the SNO node.
+
+```bash
+iperf3 -s
+```
+
+### Prepare the Performance Test on the RHEL Node
+
+The next step involves creating a privileged deployment that will start the performance test.
+
+```
+sudo dnf install podman
+podman run --network=host -it --rm quay.io/jmoller/iperf3:static --server -p 5201
+```
+
+Of course you can also build the image yourself
