@@ -1,3 +1,7 @@
 #!/bin/bash -e
-ipsec auto --add sno
-ipsec auto --up sno
+
+sudo systemctl enable ipsec
+sudo systemctl start ipsec
+
+sudo ipsec auto --add sno
+sudo ipsec auto --up sno

@@ -21,7 +21,7 @@ spec:
           right: 192.168.124.253 # Replace with your Rhel IP Address on the Network Interface, e.g. 10.1.98.208
           rightrsasigkey: '%cert'
           rightid: '%fromcert'
-          rightsubnet: 172.16.110.8/24 # This is gonna be the routed subnet
+          rightsubnet: 172.16.110.0/24 # This is gonna be the routed subnet
           ikev2: insist
           ike: aes256-sha1
           esp: aes256-sha1
