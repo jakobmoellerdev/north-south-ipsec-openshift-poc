@@ -1,0 +1,27 @@
+kind: NodeNetworkConfigurationPolicy
+apiVersion: nmstate.io/v1
+metadata:
+  name: "ipsec-policy"
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: "preview-cluster-sno.local"
+  desiredState:
+    interfaces:
+      - name: hosta_conn
+        type: ipsec
+        ipv4:
+          enabled: true
+          dhcp: true
+        libreswan:
+          leftrsasigkey: '%cert'
+          left: 192.168.124.37 # Replace with your SNO IP Address on the Network Interface 10.46.97.113
+          leftid: '%fromcert'
+          leftcert: south
+          leftmodecfgclient: false
+          right: 192.168.124.253 # Replace with your Rhel IP Address on the Network Interface, e.g. 10.1.98.208
+          rightrsasigkey: '%cert'
+          rightid: '%fromcert'
+          rightsubnet: 172.16.110.8/24 # This is gonna be the routed subnet
+          ikev2: insist
+          ike: aes256-sha1
+          esp: aes256-sha1
