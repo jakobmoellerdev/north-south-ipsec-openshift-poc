@@ -204,51 +204,41 @@ To block IRQ kernel offloading to the isolated cores, we should add a workload s
 a QOS blocker no-op workload that is using the runtime class"
 
 ```yaml
-## For details on Tuning adjustments see https://docs.openshift.com/container-platform/4.14/scalability_and_performance/cnf-low-latency-tuning.html#node-tuning-operator-creating-pod-with-guaranteed-qos-class_cnf-master
-## https://docs.openshift.com/container-platform/4.14/scalability_and_performance/cnf-low-latency-tuning.html#configuring_for_irq_dynamic_load_balancing_cnf-master
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: qos-blockers
-  namespace: default
-spec:
-  replicas: 4  # Set to the number of isolated Cores
-  selector:
-    matchLabels:
-      app: qos-blocker
-  template:
-    metadata:
-      labels:
-        app: qos-blocker
-      annotations:
-        irq-load-balancing.crio.io: "disable"
-        cpu-quota.crio.io: "disable"
-    spec:
-      securityContext:
-        runAsNonRoot: true
-      runtimeClassName: performance-ns-low-latency # uses the performance profile named ns-low-latency, adjust to name as necessary
-      priorityClassName: "openshift-user-critical"
-      containers:
-        - name: sample-app
-          image: docker.io/library/busybox:1.36
-          command: ["sh", "-c", "tail -f /dev/null"]
-          securityContext:
-            allowPrivilegeEscalation: false
-          resources:
-            requests:
-              memory: "1Mi"
-              cpu: "1"
-            limits:
-              memory: "1Mi"
-              cpu: "1"
+oc apply -f qos-blockers.yaml
 ```
+
+To ensure that the QOS block has been achieved, you can check the pods `.status.qosClass` field which should be `Guaranteed`.
 
 ### Prepare the Performance Test on the SNO
 
-This step is around creating an iperf server that listens on the SNO node.
+Download and install the Prometheus Exporter for iperf3:
 
 ```bash
-iperf3 -s
+git clone https://github.com/Avielyo10/prom
+cd prom 
+pip install -e .
+```
+
+After that use it to deploy it to the cluster.
+
+You will want to edit the config map to point to the correct iperf process id:
+
+```bash
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: process-exporter
+  namespace: openshift-monitoring
+data:
+  config.yml: |
+    process_names:
+      - comm:
+        - systemd
+        cmdline:
+        - --system
+      - ppid: 1
+      - comm:
+        - iperf3
 ```
 
 ### Prepare the Performance Test on the RHEL Node
@@ -261,3 +251,30 @@ podman run --network=host -it --rm quay.io/jmoller/iperf3:static --server -p 520
 ```
 
 Of course you can also build the image yourself
+
+## Running iperf3
+
+When Running iperf 3 all one needs to do is adjust the deployment configuration in `200-privileged-host-pid-iperf.yaml`.
+After that apply it with
+
+```bash
+oc apply -f 200-privileged-host-pid-iperf.yaml
+```
+
+At that moment, the server should receive connections through the tunnel.
+Note that if you want to have comparison results for not connecting through IPSec, you can use the host IP 
+address of the node instead of the routed subnet and it will use a non-ipsec connection.
+
+
+## Extracting data from prometheus
+
+With all the above setup and the tunnel being used by iperf3, you can now extract the data from prometheus with 
+queries like the following (only examples, you will need to adjust them to your setup):
+
+```
+sum without(mode, container, endpoint, instance, job, namespace, pod, prometheus, service, cpu) (irate(node_cpu_seconds_total{mode="system", cpu!="0|52"}[15m])) / 102
+
+quantile_over_time(0.99,sum (irate(namedprocess_namegroup_cpu_seconds_total{groupname="iperf3", mode="system"}[15m]))[15m:])
+
+quantile_over_time(0.99,sum (irate(namedprocess_namegroup_cpu_seconds_total{groupname="iperf3", mode="user"}[15m]))[15m:])
+```

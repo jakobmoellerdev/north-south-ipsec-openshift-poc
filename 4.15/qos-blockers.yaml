@@ -6,7 +6,7 @@ metadata:
   name: qos-blockers
   namespace: default
 spec:
-  replicas: 4  # Set to the number of isolated Cores
+  replicas: 3  # Set to the number of isolated Cores, equivalent to core count, not threadcount.
   selector:
     matchLabels:
       app: qos-blocker
@@ -19,7 +19,7 @@ spec:
         cpu-quota.crio.io: "disable"
     spec:
       securityContext:
-        runAsNonRoot: true
+        runAsNonRoot: false
       runtimeClassName: performance-ns-low-latency
       priorityClassName: "openshift-user-critical"
       containers:
@@ -27,7 +27,7 @@ spec:
           image: docker.io/library/busybox:1.36
           command: ["sh", "-c", "tail -f /dev/null"]
           securityContext:
-            allowPrivilegeEscalation: false
+            allowPrivilegeEscalation: true
           resources:
             requests:
               memory: "128Mi"
