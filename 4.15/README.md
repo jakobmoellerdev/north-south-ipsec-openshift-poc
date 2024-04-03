@@ -201,7 +201,8 @@ Note that this will require a reboot.
 ### Prepare QOS Blocker Workload
 
 To block IRQ kernel offloading to the isolated cores, we should add a workload scheduling 
-a QOS blocker no-op workload that is using the runtime class"
+a QOS blocker no-op workload that is using the runtime class. Note that you will have to adjust the replica count
+to your total amount of isolated cores (not threads). For example if you have a 4 core hyperthreaded layout (total of 8 threads) with 2 reserved threads, and 6 isolated threads, you will have to set the replica count to 3.
 
 ```yaml
 oc apply -f qos-blockers.yaml
@@ -219,7 +220,7 @@ cd prom
 pip install -e .
 ```
 
-After that use it to deploy it to the cluster.
+After that use it to deploy prom to the cluster.
 
 You will want to edit the config map to point to the correct iperf process id:
 
