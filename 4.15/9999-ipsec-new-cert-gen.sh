@@ -15,11 +15,11 @@ certutil -S -k rsa -n $CANAME -s "CN=$CANAME" -v 12 -t "CT,C,C" -x -d $FOLDER
 certutil -S -k rsa -c $CANAME -n $SOUTH -s "CN=$SOUTH" -v 12 -t "u,u,u" -d $FOLDER \
     --keyUsage digitalSignature,keyEncipherment \
 	--extKeyUsage serverAuth,clientAuth \
-	-8 "{args.name}"
+	-8 "$SOUTH"
 certutil -S -k rsa -c $CANAME -n $NORTH -s "CN=$NORTH" -v 12 -t "u,u,u" -d $FOLDER \
     --keyUsage digitalSignature,keyEncipherment \
 	--extKeyUsage serverAuth,clientAuth \
-	-8 "{args.name}"
+	-8 "$NORTH"
 
 pk12util -n $SOUTH -d $FOLDER -o $FOLDER/$SOUTH.p12
 certutil -L -n $CANAME -d $FOLDER -a > $FOLDER/$CANAME.crt
